@@ -1,5 +1,7 @@
 var express = require('express');
 var router = express.Router();
+var mongoose = require('mongoose');
+var Post = mongoose.model('Post');
 
 //Used for routes that must be authenticated.
 function isAuthenticated (req, res, next) {
@@ -27,31 +29,65 @@ router.route('/posts')
 	
 	//create a new post
 	.post(function(req, res){
-
-		//TODO create a new post in the database
-		res.send({message:"TODO create a new post in the database"});
+		var newPost = new Post();
+		newPost.text = req.body.text;
+		newPost.username = req.body.username;
+		newPost.save(function (err, post) {
+			if(err){
+				return res.send(500, err);
+			}
+			return res.json(post);
+		});
 	})
 
 	.get(function(req, res){
-
-		//TODO get all the posts in the database
-		res.send({message:"TODO get all the posts in the database"});
+		Post.find(function(err, posts) {
+			if(err){
+				return res.send(500, err);
+			}
+			return res.send(posts);
+		});
 	})
 
 //api for a specfic post
 router.route('/posts/:id')
 	
-	//create
-	.put(function(req,res){
-		return res.send({message:'TODO modify an existing post by using param ' + req.param.id});
-	})
+	//update post
+	.put(function(req, res){
+		Post.findById(req.params.id, function(err, post) {
+			if(err){
+				res.send(err);
+			}
 
-	.get(function(req,res){
-		return res.send({message:'TODO get an existing post by using param ' + req.param.id});
-	})
+			post.username = req.body.username;
+			post.text = req.body.text;
 
-	.delete(function(req,res){
-		return res.send({message:'TODO delete an existing post by using param ' + req.param.id})
+			post.save(function(err, post){
+				if(err){
+					res.send(err);
+				}
+
+				res.json(post);
+			});
+		});
+	})
+	// get by id
+	.get(function(req, res){
+		Post.findById(req.params.id, function(err, post) {
+			if(err){
+				res.send(err);
+			}
+			res.send(post);
+		});
+	})
+	// delete post
+	.delete(function(req, res){
+		Post.remove({_id: req.params.id}, function(err){
+			if(err){
+				res.send(err);
+			}
+			res.json("Post deleted");
+		});
 	});
 
 module.exports = router;

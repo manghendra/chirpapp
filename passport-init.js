@@ -1,7 +1,8 @@
+var mongoose = require('mongoose');
+var User = mongoose.model('User');
 var LocalStrategy   = require('passport-local').Strategy;
 var bCrypt = require('bcrypt-nodejs');
 //temporary data store
-var users = {};
 module.exports = function(passport){
 
 	// Passport needs to be able to serialize and deserialize users to support persistent login sessions
@@ -9,13 +10,16 @@ module.exports = function(passport){
 	passport.serializeUser(function(user, done) {
 		console.log('serializing user:',user.username);
 		//return the unique id for the user
-		done(null, user.username);
+		done(null, user._id);
 	});
 
 	//Desieralize user will call with the unique id provided by serializeuser
-	passport.deserializeUser(function(username, done) {
+	passport.deserializeUser(function(id, done) {
 
-		return done(null, users[username]);
+		User.findById(id, function(err, user){
+			console.log("deserializing user: " + user.username);
+			done(err, user);
+		});
 
 	});
 
@@ -24,19 +28,26 @@ module.exports = function(passport){
 		},
 		function(req, username, password, done) { 
 
-			if(users[username]){
-				console.log('User Not Found with username '+username);
-				return done(null, false);
-			}
+			User.findOne({'username' : username},
+				function (err, user) {
+					// if any error
+					if(err){
+						return done(err);
+					}
 
-			if(isValidPassword(users[username], password)){
-				//sucessfully authenticated
-				return done(null, users[username]);
-			}
-			else{
-				console.log('Invalid password '+username);
-				return done(null, false)
-			}
+					if(!user){
+						console.log("User not found with username " + username);
+						return done(null, false);
+					}
+
+					if(!isValidPassword(user, password)){
+						console.log("Invalid password");
+					}
+
+					// Username and password both match, return user from done method
+					return done(null, user);
+				}
+			);
 		}
 	));
 
@@ -44,22 +55,34 @@ module.exports = function(passport){
 			passReqToCallback : true // allows us to pass back the entire request to the callback
 		},
 		function(req, username, password, done) {
+			User.findOne({'username':username}, function (err, user) {
+				// if any error
+				if(err){
+					return done(err);
+				}
 
-			if (users[username]){
-				console.log('User already exists with username: ' + username);
-				return done(null, false);
-			}
-	
-			//store user in memory 
-			users[username] = {
-				username: username,
-				password: createHash(password)
-			}
-			
-			console.log(users[username].username + ' Registration successful');
-			return done(null, users[username]);
-		})
-	);
+				// if user alreadu exist
+				if(user){
+					console.log("User already exist with username " + username);
+				}
+				else{
+					var newUser = new User();
+					newUser.username = username;
+					newUser.password = createHash(password);
+
+					// save the user
+					newUser.save(function (err) {
+						if(err){
+							console.log("Save user error;" + err);
+							throw err;
+						}
+
+						return done(null, newUser);
+					})
+				}
+			})
+		}
+	));
 	
 	var isValidPassword = function(user, password){
 		return bCrypt.compareSync(password, user.password);
